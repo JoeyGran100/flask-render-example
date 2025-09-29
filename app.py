@@ -20,7 +20,7 @@ db = SQLAlchemy(app)
 
 # Set the upload folder configuration
 app.config['UPLOAD_FOLDER'] = 'uploads'
-
+ 
 # Ensure the uploads folder exists
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
     os.makedirs(app.config['UPLOAD_FOLDER'])
