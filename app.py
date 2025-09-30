@@ -1,5 +1,5 @@
 import random
-from datetime import datetime
+from datetime import datetime, timezone
 import re
 from email.policy import default
 
@@ -20,7 +20,7 @@ db = SQLAlchemy(app)
 
 # Set the upload folder configuration
 app.config['UPLOAD_FOLDER'] = 'uploads'
- 
+
 # Ensure the uploads folder exists
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
     os.makedirs(app.config['UPLOAD_FOLDER'])
@@ -48,7 +48,7 @@ class Message(db.Model):
     sender_id = db.Column(db.Integer, db.ForeignKey('userdetails.id'), nullable=False)
     receiver_id = db.Column(db.Integer, db.ForeignKey('userdetails.id'), nullable=False)
     message = db.Column(db.Text, nullable=False)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    timestamp = db.Column(db.DateTime, default=datetime.now(timezone.utc))
 
     sender = db.relationship('Task', foreign_keys=[sender_id], backref=db.backref('sent_messages', lazy=True))
     receiver = db.relationship('Task', foreign_keys=[receiver_id], backref=db.backref('received_messages', lazy=True))
@@ -114,7 +114,7 @@ class CheckIn(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     user_id = db.Column(db.Integer, db.ForeignKey('userdetails.id'), nullable=False)
     location_id = db.Column(db.Integer, db.ForeignKey('locationInfo.id'), nullable=False)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    timestamp = db.Column(db.DateTime, default=datetime.now(timezone.utc))
 
     user = db.relationship('Task', backref=db.backref('checkins', lazy=True))
     location = db.relationship('LocationInfo', backref=db.backref('checkins', lazy=True))
@@ -129,7 +129,7 @@ class Attendance(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     user_id = db.Column(db.Integer, db.ForeignKey('userdetails.id'), nullable=False)
     location_id = db.Column(db.Integer, db.ForeignKey('locationInfo.id'), nullable=False)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    timestamp = db.Column(db.DateTime, default=datetime.now(timezone.utc))
     hasAttended = db.Column(db.Boolean, default=False)
 
     user = db.relationship('Task', backref=db.backref('attendances', lazy=True))
@@ -146,7 +146,7 @@ class UserPreference(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('userdetails.id'), nullable=False)
     preferred_user_id = db.Column(db.Integer, db.ForeignKey('userdetails.id'), nullable=False)
     preference = db.Column(db.String(20), nullable=False)  # 'like', 'reject', 'save_later'
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    timestamp = db.Column(db.DateTime, default=datetime.now(timezone.utc))
 
     # Relationships
     user = db.relationship('Task', foreign_keys=[user_id], backref=db.backref('preferences', lazy=True))
@@ -159,8 +159,8 @@ class Match(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     user1_id = db.Column(db.Integer, db.ForeignKey('userdetails.id'), nullable=False)
     user2_id = db.Column(db.Integer, db.ForeignKey('userdetails.id'), nullable=False)
-    match_date = db.Column(db.DateTime, default=datetime.utcnow)
-    visible_after = db.Column(db.DateTime)
+    match_date = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+    visible_after = db.Column(db.Integer)
     status = db.Column(db.String(20), default='pending')  # 'pending', 'active', 'deleted'
 
     # Relationships
@@ -209,7 +209,7 @@ def set_preference():
         if existing_preference:
             # Update existing preference
             existing_preference.preference = preference
-            existing_preference.timestamp = datetime.utcnow()
+            existing_preference.timestamp = datetime.now(timezone.utc)
         else:
             # Create new preference
             new_preference = UserPreference(
@@ -239,14 +239,14 @@ def get_user_matches(email):
             return jsonify({'error': 'User not found'}), 404
 
         # Get all matches for this user that are visible now
-        current_time = datetime.utcnow()
+        current_time = datetime.now(timezone.utc)
         matches = Match.query.filter(
             or_(
                 Match.user1_id == user.id,
                 Match.user2_id == user.id
             ),
             Match.status != 'deleted',
-            Match.visible_after <= current_time
+            Match.visible_after <= get_unix_timestamp(current_time)
         ).all()
 
         # Format the response
@@ -418,13 +418,13 @@ def process_potential_match(user1_id, user2_id):
         if existing_match:
             # Update match status
             existing_match.status = 'active'
-            existing_match.visible_after = datetime.utcnow() + timedelta(minutes=20)
+            existing_match.visible_after = get_unix_timestamp(datetime.now(timezone.utc) + timedelta(minutes=20))
         else:
             # Create new match with 20 minute delay
             new_match = Match(
                 user1_id=user1_id,
                 user2_id=user2_id,
-                visible_after=datetime.utcnow() + timedelta(minutes=20),
+                visible_after=get_unix_timestamp(datetime.now(timezone.utc) + timedelta(minutes=20)),
                 status='active'
             )
             db.session.add(new_match)
@@ -443,7 +443,7 @@ def process_potential_match(user1_id, user2_id):
                     user1_id=user1_id,
                     user2_id=user2_id,
                     status='pending',
-                    visible_after=datetime.utcnow()  # Visible immediately, but pending
+                    visible_after=get_unix_timestamp(datetime.now(timezone.utc))  # Visible immediately, but pending
                 )
                 db.session.add(new_match)
 
@@ -484,7 +484,7 @@ def get_match_status(user_id, other_user_id):
             user_id=other_user_id, preferred_user_id=user_id
         ).first()
 
-        current_time = datetime.utcnow()
+        current_time = datetime.now(timezone.utc)
 
         matches = Match.query.filter(
             or_(
@@ -1099,14 +1099,15 @@ def getUserData():
                 'phone_number': userDetails.phone_number,
                 'age': userDetails.age,
                 'bio': userDetails.bio,
-                'image_url': image_url  # Include the image URL in the response
+                'image_url': image_url,  # Include the image URL in the response
+                'current_server_time': get_unix_timestamp(datetime.now(timezone.utc)),
             }
             users.append(user)
 
         return jsonify({'users': users}), 200
 
     except Exception as e:
-        return jsonify({'error': 'Internal Server Error'}), 500
+        return jsonify({'error': f'Internal Server Error: {e}'}), 500
 
 
 # Getting Relationships DATA FROM DATABASE 2025
@@ -1245,12 +1246,14 @@ def checkin():
         event_time = datetime.strptime(f"{location.date} {location.time}", "%Y-%m-%d %H:%M")
         current_time = datetime.now()
         time_diff = (current_time - event_time).total_seconds()
-        if time_diff > 600:
-            location.checkin_closed = True  # Work: 41410282
-            db.session.commit()  # Work: 41410282
-            # Trigger matchmaking when time expires (even if slots aren't full)
-            trigger_matchmaking_for_location(location_id)
-            return jsonify({'message': 'Check-in period has ended (10 minutes after event time)'}), 400
+
+        # Todo: Uncomment the following after testing
+        # if time_diff > 600:
+        #     location.checkin_closed = True  # Work: 41410282
+        #     db.session.commit()  # Work: 41410282
+        #     # Trigger matchmaking when time expires (even if slots aren't full)
+        #     trigger_matchmaking_for_location(location_id)
+        #     return jsonify({'message': 'Check-in period has ended (10 minutes after event time)'}), 400
     except Exception as e:
         print(f"Error parsing event time: {str(e)}")
 
@@ -1317,11 +1320,8 @@ def check_checkin():
         return jsonify({'checked_in': False}), 200
 
 def get_unix_timestamp(datatime):
-    # Parse the string into a datetime object (YYYY-MM-DD HH:MM:SS.microseconds)
-    dt = datetime.strptime(datatime, "%Y-%m-%d %H:%M:%S.%f")
-
     # Convert to Unix timestamp (seconds since epoch)
-    unix_ts = int(dt.timestamp())
+    unix_ts = int(datatime.timestamp())
 
     return unix_ts
 
@@ -1381,8 +1381,8 @@ def get_user_matches_for_location(user_id, location_id):
                 'phone_number': other_user_data.phone_number,
                 'image_url': image_url,
                 'status': match.status,
-                'current_server_time': get_unix_timestamp(str(datetime.utcnow())),
-                'visible_after': get_unix_timestamp(str(match.visible_after))
+                'current_server_time': get_unix_timestamp(datetime.now(timezone.utc)),
+                'visible_after': match.visible_after
             })
 
         return jsonify({'matches': result})
@@ -1537,18 +1537,18 @@ def trigger_matchmaking_for_location(location_id):
                 print(f"SKIPPING: Preference already rejected for user {female_user.id}")
                 continue
 
-
+            visible_after_timestamp = get_unix_timestamp(datetime.now(timezone.utc) + timedelta(minutes=20))
             # Create mutual match
             new_match = Match(
                 user1_id=male_user.id,
                 user2_id=female_user.id,
                 status='active',
-                visible_after=datetime.utcnow() + timedelta(minutes=20)
+                visible_after=visible_after_timestamp
             )
             db.session.add(new_match)
             matches_created += 1
             print(
-                f"Created mutual match: User {male_user.id} ({male_user.email}) ↔ User {female_user.id} ({female_user.email})")
+                f"At: {datetime.now(timezone.utc)}, Created mutual match: User {male_user.id} ({male_user.email}) ↔ User {female_user.id} ({female_user.email}), visible after: {visible_after_timestamp}")
 
         db.session.commit()
         print(f"Automatic matchmaking completed for location {location_id}: {matches_created} matches created")
