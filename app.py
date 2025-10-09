@@ -162,11 +162,12 @@ class Match(db.Model):
     match_date = db.Column(db.DateTime, default=datetime.now(timezone.utc))
     visible_after = db.Column(db.Integer)
     status = db.Column(db.String(20), default='pending')  # 'pending', 'active', 'deleted'
+    location_id = db.Column(db.Integer, db.ForeignKey('locationInfo.id'), nullable=True)
 
     # Relationships
     user1 = db.relationship('Task', foreign_keys=[user1_id], backref=db.backref('matches_as_user1', lazy=True))
     user2 = db.relationship('Task', foreign_keys=[user2_id], backref=db.backref('matches_as_user2', lazy=True))
-
+    location = db.relationship('LocationInfo', backref=db.backref('matches_at_location', lazy=True))
 
 with app.app_context():
     db.create_all()
@@ -218,6 +219,23 @@ def set_preference():
                 preference=preference
             )
             db.session.add(new_preference)
+
+        if preference == 'reject':
+            user1_id = user.id
+            user2_id = preferred_user.id
+
+            # Check if there's an existing match
+            existing_match = Match.query.filter(
+                or_(
+                    and_(Match.user1_id == user1_id, Match.user2_id == user2_id),
+                    and_(Match.user1_id == user2_id, Match.user2_id == user1_id)
+                )
+            ).first()
+
+            # Case II: One or both users rejected
+            if existing_match:
+                # Mark match as deleted
+                existing_match.status = 'deleted'
 
         # Check if this creates a match
         process_potential_match(user.id, preferred_user.id)
@@ -759,6 +777,74 @@ def home():
     return jsonify({"user_details": task_list})
 
 
+# POSTING USER DATA TO DATABASE
+@app.route('/massUserData', methods=['POST'])
+def mass_update_user_data():
+    try:
+
+        data = request.get_json()
+
+        users = data.get('users')
+
+        for userData in users:
+            newEmail = userData['email']
+            user = Task.query.filter_by(email=newEmail).first()
+
+            if not user:
+                continue
+
+            user_auth_id = user.id
+            firstname = userData['firstname']
+            lastname = userData['lastname']
+            gender = userData['gender']
+            hobbies = userData['hobbies']
+            preferences = userData['preferences']
+            phone_number = userData['phone_number']
+            age = userData['age']
+            bio = userData['bio']
+
+            # Check if user details already exist
+            userDetails = UserData.query.filter_by(user_auth_id=user_auth_id).first()
+
+            if userDetails:
+                # Update existing user details
+                userDetails.firstname = firstname
+                userDetails.lastname = lastname
+                userDetails.email = newEmail
+                userDetails.gender = gender
+                userDetails.hobbies = hobbies
+                userDetails.preferences = preferences
+                userDetails.phone_number = phone_number
+                userDetails.age = age
+                userDetails.bio = bio
+
+                print(f'Updated user details: {newEmail}')
+
+            else:
+                # Add new user details
+                userDetails = UserData(
+                    user_auth_id=user_auth_id,
+                    firstname=firstname,
+                    lastname=lastname,
+                    email=newEmail,
+                    gender=gender,
+                    hobbies=hobbies,
+                    preferences=preferences,
+                    phone_number=phone_number,
+                    age=age,
+                    bio=bio
+                )
+                db.session.add(userDetails)
+                print(f'Added user details: {newEmail}')
+
+        db.session.commit()
+
+        return jsonify({'message': 'Users data updated'}), 201
+
+    except Exception as e:
+        return jsonify({'error': 'Internal Server Error'}), 500
+
+
 @app.route('/create_all', methods=['POST'])
 def mass_create_users():
     try:
@@ -789,6 +875,7 @@ def mass_create_users():
             newUserDetails = Task(email=new_email, password=new_password)
             db.session.add(newUserDetails)
             db.session.commit()
+            print(f'New user created email: {new_email}')
 
         return jsonify({'message': "New Users added"}), 201
 
@@ -1319,6 +1406,7 @@ def check_checkin():
     else:
         return jsonify({'checked_in': False}), 200
 
+
 def get_unix_timestamp(datatime):
     # Convert to Unix timestamp (seconds since epoch)
     unix_ts = int(datatime.timestamp())
@@ -1358,7 +1446,8 @@ def get_user_matches_for_location(user_id, location_id):
         result = []
         for match in existing_matches:
 
-            matched_user_id = int(match.user2_id if match.user1_id == user_id else match.user1_id) # get opposite match id
+            matched_user_id = int(
+                match.user2_id if match.user1_id == user_id else match.user1_id)  # get opposite match id
 
             # Get user image if available
             user_image = UserImages.query.filter_by(user_auth_id=matched_user_id).first()
@@ -1390,6 +1479,7 @@ def get_user_matches_for_location(user_id, location_id):
     except Exception as e:
         print(f"Error in get_user_matches: {str(e)}")
         return jsonify({'matches': []})
+
 
 def trigger_matchmaking_for_location(location_id):
     """
@@ -1423,6 +1513,28 @@ def trigger_matchmaking_for_location(location_id):
         if len(checked_in_users) < 2:
             print(f"Not enough valid users for matchmaking at location {location_id}")
             return None
+
+        # Query to get all existing active matches at this location for all the checked in users
+        existing_matches = (
+            db.session.query(Match)
+            .filter(
+                Match.status == 'active',
+                or_(
+                    Match.user1_id.in_(checked_in_user_ids),
+                    Match.user2_id.in_(checked_in_user_ids)
+                ),
+                Match.location_id == location_id,
+            )
+            .all()
+        )
+
+        existing_matches_tuple = []
+        if existing_matches:
+            for match in existing_matches:
+                user_1 = match.user1_id
+                user_2 = match.user2_id
+                existing_matches_tuple.append((user_1, user_2))
+                existing_matches_tuple.append((user_2, user_1))
 
         # Separate users by gender for proper matching
         male_users = []
@@ -1519,6 +1631,9 @@ def trigger_matchmaking_for_location(location_id):
                 print(f"SKIPPING: Self-match detected for user {male_user.id}")
                 continue
 
+            if (male_user.id, female_user.id) in existing_matches_tuple:
+                print(f"SKIPPING: Existing match found ({male_user.id}, {female_user.id}) with active status")
+                continue
 
             # Get user preferences
             user_pref = UserPreference.query.filter_by(
@@ -1528,7 +1643,6 @@ def trigger_matchmaking_for_location(location_id):
             other_pref = UserPreference.query.filter_by(
                 user_id=female_user.id, preferred_user_id=male_user.id
             ).first()
-
 
             if user_pref and user_pref.preference == 'reject':
                 print(f"SKIPPING: Preference already rejected for user {male_user.id}")
@@ -1543,6 +1657,7 @@ def trigger_matchmaking_for_location(location_id):
                 user1_id=male_user.id,
                 user2_id=female_user.id,
                 status='active',
+                location_id=location_id,
                 visible_after=visible_after_timestamp
             )
             db.session.add(new_match)
@@ -1568,7 +1683,6 @@ def trigger_matchmaking_for_location(location_id):
         print(f"Error in automatic matchmaking: {str(e)}")
         db.session.rollback()
         return None
-
 
 
 @app.route('/attend', methods=['POST'])
