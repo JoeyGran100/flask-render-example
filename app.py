@@ -9,12 +9,12 @@ from flask_socketio import SocketIO, join_room, send, emit
 import os
 from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
-from sqlalchemy import or_, and_
+from sqlalchemy import or_, and_, desc
 from flask import request, jsonify
 
 app = Flask(__name__)
 app.config[
-    'SQLALCHEMY_DATABASE_URI'] = "postgresql://wingsdatingapp801_render_example_user:rTUTyQfNOBSWNXU7cMExgm4UP1Y1NfaV@dpg-d3jse4ali9vc73f37tm0-a.frankfurt-postgres.render.com/wingsdatingapp801_render_example"
+    'SQLALCHEMY_DATABASE_URI'] = "postgresql://wings901_render_example_k1sh_user:vetsoJOgq7onkgwFL2nibjSZH7tOn9vT@dpg-d3mch73ipnbc73aljl70-a.frankfurt-postgres.render.com/wings901_render_example_k1sh"
 socketio = SocketIO(app)
 db = SQLAlchemy(app)
 
@@ -1334,13 +1334,12 @@ def checkin():
         current_time = datetime.now()
         time_diff = (current_time - event_time).total_seconds()
 
-        # Todo: Uncomment the following after testing
-        # if time_diff > 600:
-        #     location.checkin_closed = True  # Work: 41410282
-        #     db.session.commit()  # Work: 41410282
-        #     # Trigger matchmaking when time expires (even if slots aren't full)
-        #     trigger_matchmaking_for_location(location_id)
-        #     return jsonify({'message': 'Check-in period has ended (10 minutes after event time)'}), 400
+        if time_diff > 600:
+            location.checkin_closed = True  # Work: 41410282
+            db.session.commit()  # Work: 41410282
+            # Trigger matchmaking when time expires (even if slots aren't full)
+            trigger_matchmaking_for_location(location_id)
+            return jsonify({'message': 'Check-in period has ended (10 minutes after event time)'}), 400
     except Exception as e:
         print(f"Error parsing event time: {str(e)}")
 
@@ -1431,11 +1430,10 @@ def get_user_matches_for_location(user_id, location_id):
             ))
             .filter(
                 or_(Match.user1_id == user_id, Match.user2_id == user_id),
-
                 Match.status == 'active',
-
-                CheckIn.location_id == location_id
+                Match.location_id == location_id
             )
+            .order_by(desc(Match.visible_after))
             .all()
         )
 
@@ -1470,6 +1468,7 @@ def get_user_matches_for_location(user_id, location_id):
                 'phone_number': other_user_data.phone_number,
                 'image_url': image_url,
                 'status': match.status,
+                'location': match.location_id,
                 'current_server_time': get_unix_timestamp(datetime.now(timezone.utc)),
                 'visible_after': match.visible_after
             })
@@ -1527,7 +1526,6 @@ def trigger_matchmaking_for_location(location_id):
             )
             .all()
         )
-
         existing_matches_tuple = []
         if existing_matches:
             for match in existing_matches:
