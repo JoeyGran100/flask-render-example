@@ -14,7 +14,7 @@ from flask import request, jsonify
 
 app = Flask(__name__)
 app.config[
-    'SQLALCHEMY_DATABASE_URI'] = "postgresql://wings901_render_example_k1sh_user:vetsoJOgq7onkgwFL2nibjSZH7tOn9vT@dpg-d3mch73ipnbc73aljl70-a.frankfurt-postgres.render.com/wings901_render_example_k1sh"
+    'SQLALCHEMY_DATABASE_URI'] = "postgresql://wingit1001_render_example_user:rLciLb3QpNSKJUK2pxk8IdUoNKrjnU59@dpg-d3n19k15pdvs738jubf0-a.frankfurt-postgres.render.com/wingit1001_render_example"
 socketio = SocketIO(app)
 db = SQLAlchemy(app)
 
@@ -1334,12 +1334,12 @@ def checkin():
         current_time = datetime.now()
         time_diff = (current_time - event_time).total_seconds()
 
-        if time_diff > 600:
-            location.checkin_closed = True  # Work: 41410282
-            db.session.commit()  # Work: 41410282
-            # Trigger matchmaking when time expires (even if slots aren't full)
-            trigger_matchmaking_for_location(location_id)
-            return jsonify({'message': 'Check-in period has ended (10 minutes after event time)'}), 400
+        # if time_diff > 600:
+        #     location.checkin_closed = True  # Work: 41410282
+        #     db.session.commit()  # Work: 41410282
+        #     # Trigger matchmaking when time expires (even if slots aren't full)
+        #     trigger_matchmaking_for_location(location_id)
+        #     return jsonify({'message': 'Check-in period has ended (10 minutes after event time)'}), 400
     except Exception as e:
         print(f"Error parsing event time: {str(e)}")
 
@@ -1643,10 +1643,10 @@ def trigger_matchmaking_for_location(location_id):
             ).first()
 
             if user_pref and user_pref.preference == 'reject':
-                print(f"SKIPPING: Preference already rejected for user {male_user.id}")
+                print(f"SKIPPING: Preference already rejected for user {female_user.id} by user {male_user.id}")
                 continue
             elif other_pref and other_pref.preference == 'reject':
-                print(f"SKIPPING: Preference already rejected for user {female_user.id}")
+                print(f"SKIPPING: Preference already rejected for user {male_user.id} by user {female_user.id}")
                 continue
 
             visible_after_timestamp = get_unix_timestamp(datetime.now(timezone.utc) + timedelta(minutes=20))
