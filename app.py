@@ -169,7 +169,12 @@ class Match(db.Model):
     user2 = db.relationship('Task', foreign_keys=[user2_id], backref=db.backref('matches_as_user2', lazy=True))
     location = db.relationship('LocationInfo', backref=db.backref('matches_at_location', lazy=True))
 
+
 with app.app_context():
+    # Match.__table__.drop(db.engine)
+    # UserPreference.__table__.drop(db.engine)
+    # Attendance.__table__.drop(db.engine)
+    # CheckIn.__table__.drop(db.engine)
     db.create_all()
 
 
@@ -1334,12 +1339,12 @@ def checkin():
         current_time = datetime.now()
         time_diff = (current_time - event_time).total_seconds()
 
-        # if time_diff > 600:
-        #     location.checkin_closed = True  # Work: 41410282
-        #     db.session.commit()  # Work: 41410282
-        #     # Trigger matchmaking when time expires (even if slots aren't full)
-        #     trigger_matchmaking_for_location(location_id)
-        #     return jsonify({'message': 'Check-in period has ended (10 minutes after event time)'}), 400
+        if time_diff > 600:
+            location.checkin_closed = True  # Work: 41410282
+            db.session.commit()  # Work: 41410282
+            # Trigger matchmaking when time expires (even if slots aren't full)
+            trigger_matchmaking_for_location(location_id)
+            return jsonify({'message': 'Check-in period has ended (10 minutes after event time)'}), 400
     except Exception as e:
         print(f"Error parsing event time: {str(e)}")
 
@@ -1412,6 +1417,7 @@ def get_unix_timestamp(datatime):
 
     return unix_ts
 
+
 @app.route('/matches_at_location/<int:user_id>/<int:location_id>', methods=['GET'])
 def get_user_matches_for_location(user_id, location_id):
     try:
@@ -1438,7 +1444,17 @@ def get_user_matches_for_location(user_id, location_id):
         )
 
         if len(existing_matches) == 0:
-            return jsonify({'message': 'No match found for this event'}), 400
+            return jsonify({'message': 'No matches left for this event'}), 400
+
+        preferences = (UserPreference.query
+                       .filter(
+                            or_(UserPreference.user_id == user_id, UserPreference.preferred_user_id == user_id)
+                       ).all())
+
+        preference_pairs = set()
+        for pref in preferences:
+            preference_pairs.add((pref.user_id, pref.preferred_user_id))
+            preference_pairs.add((pref.preferred_user_id, pref.user_id)) # Add reverse pair also
 
         # Format results with matches
         result = []
@@ -1446,6 +1462,11 @@ def get_user_matches_for_location(user_id, location_id):
 
             matched_user_id = int(
                 match.user2_id if match.user1_id == user_id else match.user1_id)  # get opposite match id
+
+            # Checking if this match already has a preference available
+            if (user_id, matched_user_id) in preference_pairs:
+                print(f"SKIPPING: Existing preference found")
+                continue
 
             # Get user image if available
             user_image = UserImages.query.filter_by(user_auth_id=matched_user_id).first()
@@ -1472,6 +1493,9 @@ def get_user_matches_for_location(user_id, location_id):
                 'current_server_time': get_unix_timestamp(datetime.now(timezone.utc)),
                 'visible_after': match.visible_after
             })
+
+        if len(result) == 0:
+            return jsonify({'message': 'No matches left for this event'}), 400
 
         return jsonify({'matches': result})
 
