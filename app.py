@@ -14,7 +14,7 @@ from flask import request, jsonify
 
 app = Flask(__name__)
 app.config[
-    'SQLALCHEMY_DATABASE_URI'] = "postgresql://wingit1001_render_example_user:rLciLb3QpNSKJUK2pxk8IdUoNKrjnU59@dpg-d3n19k15pdvs738jubf0-a.frankfurt-postgres.render.com/wingit1001_render_example"
+    'SQLALCHEMY_DATABASE_URI'] = "postgresql://wingit1101_render_example_user:TmsZe87qcd5mDckPTF3sxB9G8cRxBSyp@dpg-d3ogr87diees73b9cg70-a.frankfurt-postgres.render.com/wingit1101_render_example"
 socketio = SocketIO(app)
 db = SQLAlchemy(app)
 
@@ -161,7 +161,8 @@ class Match(db.Model):
     user2_id = db.Column(db.Integer, db.ForeignKey('userdetails.id'), nullable=False)
     match_date = db.Column(db.DateTime, default=datetime.now(timezone.utc))
     visible_after = db.Column(db.Integer)
-    status = db.Column(db.String(20), default='pending')  # 'pending', 'active', 'deleted'
+    status = db.Column(db.String(20), default='pending')  # only for matchmaking
+    consent = db.Column(db.String(20), default='pending')  # 'pending', 'synergy', 'deleted'    
     location_id = db.Column(db.Integer, db.ForeignKey('locationInfo.id'), nullable=True)
 
     # Relationships
@@ -240,7 +241,7 @@ def set_preference():
             # Case II: One or both users rejected
             if existing_match:
                 # Mark match as deleted
-                existing_match.status = 'deleted'
+                existing_match.consent = 'deleted'
 
         # Check if this creates a match
         process_potential_match(user.id, preferred_user.id)
@@ -268,7 +269,7 @@ def get_user_matches(email):
                 Match.user1_id == user.id,
                 Match.user2_id == user.id
             ),
-            Match.status != 'deleted',
+            Match.consent != 'deleted',
             Match.visible_after <= get_unix_timestamp(current_time)
         ).all()
 
@@ -292,20 +293,20 @@ def get_user_matches(email):
                 user_id=other_user_id, preferred_user_id=user.id
             ).first()
 
-            # Determine match status from user's perspective
-            if match.status == 'active':
+            # Determine match consent from user's perspective
+            if match.consent == 'active':
                 # Both liked each other
-                display_status = 'matched'
+                display_consent = 'matched'
                 show_message_button = True
             else:  # status is 'pending'
                 if user_pref and user_pref.preference == 'save_later':
-                    display_status = 'decide'  # User needs to decide
+                    display_consent = 'decide'  # User needs to decide
                     show_message_button = False
                 elif other_pref and other_pref.preference == 'save_later':
-                    display_status = 'pending'  # Waiting for other user
+                    display_consent = 'pending'  # Waiting for other user
                     show_message_button = False
                 else:
-                    display_status = 'pending'  # Generic pending
+                    display_consent = 'pending'  # Generic pending
                     show_message_button = False
 
             # Get profile image
@@ -322,7 +323,7 @@ def get_user_matches(email):
                 'email': other_user.email,
                 'age': other_user_data.age,
                 'bio': other_user_data.bio,
-                'status': display_status,
+                'consent': display_consent,
                 'show_message_button': show_message_button,
                 'match_date': match.match_date,
                 'image_url': image_url
@@ -403,7 +404,7 @@ def update_match_status():
                 db.session.add(new_pref)
 
             # Mark match as deleted
-            match.status = 'deleted'
+            match.consent = 'deleted'
 
         db.session.commit()
 
@@ -439,8 +440,8 @@ def process_potential_match(user1_id, user2_id):
     # Case I: Both users like each other
     if pref1.preference == 'like' and pref2.preference == 'like':
         if existing_match:
-            # Update match status
-            existing_match.status = 'active'
+            # Update match consent
+            existing_match.consent = 'active'
             existing_match.visible_after = get_unix_timestamp(datetime.now(timezone.utc) + timedelta(minutes=20))
         else:
             # Create new match with 20 minute delay
@@ -448,14 +449,14 @@ def process_potential_match(user1_id, user2_id):
                 user1_id=user1_id,
                 user2_id=user2_id,
                 visible_after=get_unix_timestamp(datetime.now(timezone.utc) + timedelta(minutes=20)),
-                status='active'
+                consent='active'
             )
             db.session.add(new_match)
     # Case II: One or both users rejected
     elif pref1.preference == 'reject' or pref2.preference == 'reject':
         if existing_match:
             # Mark match as deleted
-            existing_match.status = 'deleted'
+            existing_match.consent = 'deleted'
     # Case III & IV: Save for later scenarios
     elif pref1.preference == 'save_later' or pref2.preference == 'save_later':
         # Only proceed if neither preference is 'reject'
@@ -465,7 +466,7 @@ def process_potential_match(user1_id, user2_id):
                 new_match = Match(
                     user1_id=user1_id,
                     user2_id=user2_id,
-                    status='pending',
+                    consent='pending',
                     visible_after=get_unix_timestamp(datetime.now(timezone.utc))  # Visible immediately, but pending
                 )
                 db.session.add(new_match)
@@ -514,7 +515,7 @@ def get_match_status(user_id, other_user_id):
                 Match.user1_id == user_id,
                 Match.user2_id == user_id
             ),
-            Match.status != 'deleted',
+            Match.consent != 'deleted',
             Match.visible_after <= current_time
         ).all()
         for match in matches:
@@ -525,25 +526,25 @@ def get_match_status(user_id, other_user_id):
             if matched_user_id != other_user_id:
                 continue
 
-            # Determine match status from user's perspective
-            if match.status == 'active':
+            # Determine match consent from user's perspective
+            if match.consent == 'active':
                 # Both liked each other
-                display_status = 'matched'
+                display_consent = 'matched'
                 show_message_button = True
-            else:  # status is 'pending'
+            else:  # consent is 'pending'
                 if user_pref and user_pref.preference == 'save_later':
-                    display_status = 'decide'  # User needs to decide
+                    display_consent = 'decide'  # User needs to decide
                     show_message_button = False
                 elif other_pref and other_pref.preference == 'save_later':
-                    display_status = 'pending'  # Waiting for other user
+                    display_consent = 'pending'  # Waiting for other user
                     show_message_button = False
                 else:
-                    display_status = 'pending'  # Generic pending
+                    display_consent = 'pending'  # Generic pending
                     show_message_button = False
-            return [display_status, show_message_button]
+            return [display_consent, show_message_button]
         return ""
     except Exception as e:
-        print(f"Error in get_status: {str(e)}")
+        print(f"Error in get_consent: {str(e)}")
         return ""
 
 
@@ -572,8 +573,8 @@ def get_user_matches(user_id, limit=5):
         # Get existing matches and preferences to avoid duplicates
         existing_matches = Match.query.filter(
             or_(Match.user1_id == user_id, Match.user2_id == user_id),
-            # and_(Match.status != 'deleted', Match.status != 'active')
-            Match.status != 'deleted'
+            # and_(Match.consent != 'deleted', Match.consent != 'active')
+            Match.consent != 'deleted'
         ).all()
 
         existing_preferences = UserPreference.query.filter_by(user_id=user_id).all()
@@ -1489,6 +1490,7 @@ def get_user_matches_for_location(user_id, location_id):
                 'phone_number': other_user_data.phone_number,
                 'image_url': image_url,
                 'status': match.status,
+                'consent': match.consent,                
                 'location': match.location_id,
                 'current_server_time': get_unix_timestamp(datetime.now(timezone.utc)),
                 'visible_after': match.visible_after
