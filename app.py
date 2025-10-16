@@ -298,7 +298,7 @@ def get_user_matches(email):
                 # Both liked each other
                 display_consent = 'matched'
                 show_message_button = True
-            else:  # status is 'pending'
+            else:  # consent is 'pending'
                 if user_pref and user_pref.preference == 'save_later':
                     display_consent = 'decide'  # User needs to decide
                     show_message_button = False
