@@ -11,8 +11,12 @@ from datetime import datetime, timedelta
 from sqlalchemy import or_, and_, desc
 from flask import request, jsonify
 import time
+from flask_cors import CORS
 
 app = Flask(__name__)
+
+# Enable CORS before running the server
+CORS(app)
 app.config[
     'SQLALCHEMY_DATABASE_URI'] = "http://10.0.2.2:5000"
 socketio = SocketIO(app)
