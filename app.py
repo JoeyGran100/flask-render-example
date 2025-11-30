@@ -14,7 +14,7 @@ from flask import request, jsonify
 
 app = Flask(__name__)
 app.config[
-    'SQLALCHEMY_DATABASE_URI'] = "postgresql://wings1501_render_example_user:8sGucMxNyjzlx55saS1QweIpouxxNhtg@dpg-d3r0h4emcj7s73bi2cdg-a.frankfurt-postgres.render.com/wings1501_render_example"
+    'SQLALCHEMY_DATABASE_URI'] = "postgresql://wingseventapp1_render_example_user:Y1pJLI8YEbGQVNi5lPZLz7hMxLLIN52J@dpg-d4m531chg0os73bk9nlg-a.frankfurt-postgres.render.com/wingseventapp1_render_example"
 socketio = SocketIO(app)
 db = SQLAlchemy(app)
 
@@ -92,8 +92,16 @@ class UserImages(db.Model):
     user = db.relationship('Task', backref=db.backref('user_image', lazy=True))
 
 
+class EventCategory(db.Model):
+    __tablename__ = 'event_categories'
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    name = db.Column(db.String(100), unique=True, nullable=False)
+
+
 class LocationInfo(db.Model):
     __tablename__ = 'locationInfo'
+
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     maxAttendees = db.Column(db.Integer)
     maleAttendees = db.Column(db.Integer)
@@ -104,8 +112,12 @@ class LocationInfo(db.Model):
     lat = db.Column(db.Float)
     lng = db.Column(db.Float)
     totalPrice = db.Column(db.Integer)
-    checkin_closed = db.Column(db.Boolean, default=False)  # Work: 41410282
-    event_type = db.Column(db.String(100))  # e.g. "Music", "DJ Night", "Live Band"   
+    checkin_closed = db.Column(db.Boolean, default=False)
+
+    event_category_id = db.Column(db.Integer, db.ForeignKey('event_categories.id'))
+    event_category = db.relationship("EventCategory")
+
+    current_round = db.Column(db.Integer, default=1) 
 
 
 class CheckIn(db.Model):
@@ -1223,7 +1235,17 @@ def get_relationship_data():
 def postLocationInfo():
     data = request.get_json()
 
-    # Create new location
+    # Get category name from request
+    category_name = data.get('event_category')
+
+    # Find or create category
+    category = EventCategory.query.filter_by(name=category_name).first()
+    if not category:
+        category = EventCategory(name=category_name)
+        db.session.add(category)
+        db.session.commit()
+
+    # Create new event
     newLocationDetails = LocationInfo(
         maxAttendees=data.get('maxAttendees'),
         maleAttendees=0,
@@ -1234,10 +1256,12 @@ def postLocationInfo():
         lat=data.get('lat'),
         lng=data.get('lng'),
         totalPrice=data.get('totalPrice'),
-        event_type=data.get('event_type')
+        event_category_id=category.id
     )
+
     db.session.add(newLocationDetails)
     db.session.commit()
+
     return jsonify({'message': "New Location added"}), 201
 
 
@@ -1256,7 +1280,9 @@ def getLocationInfo():
             'lat': userloc.lat,
             'lng': userloc.lng,
             'totalPrice': userloc.totalPrice,
-            'event_type': userloc.event_type
+            'event_category': userloc.event_category.name if userloc.event_category else None,
+            'event_category_id': userloc.event_category_id,
+            'current_round': userloc.current_round
         }
         for userloc in locationInfo
     ]
@@ -1282,11 +1308,12 @@ def get_user_tickets():
 
         tickets.append({
             'location_id': location.id,
-            'event_type': location.event_type,  # Event type
+            'event_category': location.event_category.name if location.event_category else None,
+            'event_category_id': location.event_category_id,
             'date': location.date,
             'time': location.time,
             'location': location.location,
-            'checked_in': checked_in,  # Check-in status
+            'checked_in': checked_in,
             'maleAttendees': location.maleAttendees or 0,
             'femaleAttendees': location.femaleAttendees or 0,
             'maxAttendees': location.maxAttendees or 0
