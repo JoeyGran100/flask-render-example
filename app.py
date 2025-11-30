@@ -14,7 +14,7 @@ from flask import request, jsonify
 
 app = Flask(__name__)
 app.config[
-    'SQLALCHEMY_DATABASE_URI'] = "postgresql://wingseventapp1_render_example_user:Y1pJLI8YEbGQVNi5lPZLz7hMxLLIN52J@dpg-d4m531chg0os73bk9nlg-a.frankfurt-postgres.render.com/wingseventapp1_render_example"
+    'SQLALCHEMY_DATABASE_URI'] = "postgresql://wingseventapp2_render_example_user:eO37IL5WEnCVMRDyn6coTkTOnTP2R2wE@dpg-d4m7ejfdiees739sueug-a.frankfurt-postgres.render.com/wingseventapp2_render_example"
 socketio = SocketIO(app)
 db = SQLAlchemy(app)
 
@@ -92,6 +92,13 @@ class UserImages(db.Model):
     user = db.relationship('Task', backref=db.backref('user_image', lazy=True))
 
 
+class EventHost(db.Model):
+    __tablename__ = 'event_hosts'
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    name = db.Column(db.String(100), unique=True, nullable=False)
+
+
 class EventCategory(db.Model):
     __tablename__ = 'event_categories'
 
@@ -109,15 +116,23 @@ class LocationInfo(db.Model):
     date = db.Column(db.String(200))
     time = db.Column(db.String(20))
     location = db.Column(db.String(200))
+    description = db.Column(db.String(500))  # NEW FIELD    
     lat = db.Column(db.Float)
     lng = db.Column(db.Float)
     totalPrice = db.Column(db.Integer)
     checkin_closed = db.Column(db.Boolean, default=False)
 
+    # NEW FIELD
+    matchmake = db.Column(db.Boolean, default=False)
+
     event_category_id = db.Column(db.Integer, db.ForeignKey('event_categories.id'))
     event_category = db.relationship("EventCategory")
+    
+    # Host (NEW)
+    event_host_id = db.Column(db.Integer, db.ForeignKey('event_hosts.id'))
+    event_host = db.relationship("EventHost")
 
-    current_round = db.Column(db.Integer, default=1) 
+    current_round = db.Column(db.Integer, default=1)
 
 
 class CheckIn(db.Model):
@@ -1235,17 +1250,22 @@ def get_relationship_data():
 def postLocationInfo():
     data = request.get_json()
 
-    # Get category name from request
-    category_name = data.get('event_category')
-
-    # Find or create category
+    # CATEGORY
+    category_name = data.get("event_category")
     category = EventCategory.query.filter_by(name=category_name).first()
     if not category:
         category = EventCategory(name=category_name)
         db.session.add(category)
         db.session.commit()
 
-    # Create new event
+    # HOST
+    host_name = data.get("event_host")
+    host = EventHost.query.filter_by(name=host_name).first()
+    if not host:
+        host = EventHost(name=host_name)
+        db.session.add(host)
+        db.session.commit()
+
     newLocationDetails = LocationInfo(
         maxAttendees=data.get('maxAttendees'),
         maleAttendees=0,
@@ -1256,12 +1276,13 @@ def postLocationInfo():
         lat=data.get('lat'),
         lng=data.get('lng'),
         totalPrice=data.get('totalPrice'),
-        event_category_id=category.id
+        description=data.get('description'),
+        event_category_id=category.id,
+        event_host_id=host.id
     )
 
     db.session.add(newLocationDetails)
     db.session.commit()
-
     return jsonify({'message': "New Location added"}), 201
 
 
@@ -1280,8 +1301,12 @@ def getLocationInfo():
             'lat': userloc.lat,
             'lng': userloc.lng,
             'totalPrice': userloc.totalPrice,
+            'description': userloc.description,  # NEW
+            'matchmake': userloc.matchmake,      # NEW
             'event_category': userloc.event_category.name if userloc.event_category else None,
             'event_category_id': userloc.event_category_id,
+            'event_host': userloc.event_host.name if hasattr(userloc, 'event_host') and userloc.event_host else None,  # NEW
+            'event_host_id': userloc.event_host_id if hasattr(userloc, 'event_host_id') else None,  # NEW
             'current_round': userloc.current_round
         }
         for userloc in locationInfo
@@ -1310,6 +1335,10 @@ def get_user_tickets():
             'location_id': location.id,
             'event_category': location.event_category.name if location.event_category else None,
             'event_category_id': location.event_category_id,
+            'event_host': location.event_host.name if location.event_host else None,  # NEW
+            'event_host_id': location.event_host_id,
+            'description': location.description,  # NEW
+            'matchmake': location.matchmake,      # NEW
             'date': location.date,
             'time': location.time,
             'location': location.location,
