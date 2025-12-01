@@ -1250,21 +1250,20 @@ def get_relationship_data():
 def postLocationInfo():
     data = request.get_json()
 
-    # CATEGORY
+    # CATEGORY (string value: Music, Festival, etc.)
     category_name = data.get("event_category")
     category = EventCategory.query.filter_by(name=category_name).first()
     if not category:
+        # only categories are allowed to be created on the fly
         category = EventCategory(name=category_name)
         db.session.add(category)
         db.session.commit()
 
-    # HOST
-    host_name = data.get("event_host")
-    host = EventHost.query.filter_by(name=host_name).first()
+    # HOST (must be ID from frontend, cannot be created)
+    host_id = data.get("event_host_id")
+    host = EventHost.query.get(host_id)
     if not host:
-        host = EventHost(name=host_name)
-        db.session.add(host)
-        db.session.commit()
+        return jsonify({"error": "Invalid event_host_id"}), 400
 
     newLocationDetails = LocationInfo(
         maxAttendees=data.get('maxAttendees'),
