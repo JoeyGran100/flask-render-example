@@ -1264,6 +1264,9 @@ def postLocationInfo():
     host = EventHost.query.get(host_id)
     if not host:
         return jsonify({"error": "Invalid event_host_id"}), 400
+    
+    # MATCHMAKE (optional, default False)
+    matchmake_value = data.get('matchmake', False)
 
     newLocationDetails = LocationInfo(
         maxAttendees=data.get('maxAttendees'),
@@ -1277,7 +1280,8 @@ def postLocationInfo():
         totalPrice=data.get('totalPrice'),
         description=data.get('description'),
         event_category_id=category.id,
-        event_host_id=host.id
+        event_host_id=host.id,
+        matchmake=matchmake_value
     )
 
     db.session.add(newLocationDetails)
