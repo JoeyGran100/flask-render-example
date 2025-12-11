@@ -1288,6 +1288,7 @@ def postLocationInfo():
         event_host_id=host.id,
         matchmake=matchmake_value
     )
+    
 
     db.session.add(newLocationDetails)
     db.session.commit()
