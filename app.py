@@ -11,6 +11,8 @@ from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
 from sqlalchemy import or_, and_, desc
 from flask import request, jsonify
+import traceback
+from sqlalchemy.exc import SQLAlchemyError
 
 app = Flask(__name__)
 app.config[
@@ -1248,52 +1250,90 @@ def get_relationship_data():
 
 @app.route('/locationInfo', methods=['POST'])
 def postLocationInfo():
-    data = request.get_json()
+    try:
+        data = request.get_json()
+        print("POST /locationInfo received:", data)
 
-    # CATEGORY — frontend sends a string name: "Music", "Festival", etc.
-    category_name = data.get("event_category")
-    if not category_name:
-        return jsonify({"error": "event_category is required"}), 400
+        # ===== CATEGORY =====
+        category_name = data.get("event_category")
+        if not category_name:
+            return jsonify({"error": "event_category is required"}), 400
 
-    category = EventCategory.query.filter_by(name=category_name).first()
-    if not category:
-        category = EventCategory(name=category_name)
-        db.session.add(category)
-        db.session.commit()
+        try:
+            category = EventCategory.query.filter_by(name=category_name).first()
+            if not category:
+                category = EventCategory(name=category_name)
+                db.session.add(category)
+                db.session.commit()
+            print("Category OK:", category.name)
+        except SQLAlchemyError as e:
+            print("Error processing category:", e)
+            traceback.print_exc()
+            db.session.rollback()
+            return jsonify({"error": "Category processing failed"}), 500
 
-    # HOST — must exist already (ID from frontend)
-    host_id = data.get("event_host_id")
-    if not host_id:
-        return jsonify({"error": "event_host_id is required"}), 400
+        # ===== HOST =====
+        host_id = data.get("event_host_id")
+        if host_id is None:
+            return jsonify({"error": "event_host_id is required"}), 400
 
-    host = EventHost.query.get(host_id)
-    if not host:
-        return jsonify({"error": "Invalid event_host_id"}), 400
+        try:
+            host = EventHost.query.get(host_id)
+            if not host:
+                return jsonify({"error": "Invalid event_host_id"}), 400
+            print("Host OK:", host.id)
+        except SQLAlchemyError as e:
+            print("Error processing host:", e)
+            traceback.print_exc()
+            return jsonify({"error": "Host processing failed"}), 500
 
-    # MATCHMAKE — optional, False default
-    matchmake_value = data.get("matchmake", False)
+        # ===== OTHER FIELDS =====
+        try:
+            maxAttendees = data.get('maxAttendees')
+            if maxAttendees is None:
+                return jsonify({"error": "maxAttendees is required"}), 400
 
-    newLocationDetails = LocationInfo(
-        maxAttendees=data.get('maxAttendees'),
-        maleAttendees=0,
-        femaleAttendees=0,
-        date=data.get('date'),
-        time=data.get('time'),
-        location=data.get('location'),
-        lat=data.get('lat'),
-        lng=data.get('lng'),
-        totalPrice=data.get('totalPrice'),
-        description=data.get('description'),
-        event_category_id=category.id,
-        event_host_id=host.id,
-        matchmake=matchmake_value
-    )
-    
+            lat = data.get('lat')
+            lng = data.get('lng')
+            totalPrice = data.get('totalPrice')
 
-    db.session.add(newLocationDetails)
-    db.session.commit()
+            newLocationDetails = LocationInfo(
+                maxAttendees=int(maxAttendees),
+                maleAttendees=0,
+                femaleAttendees=0,
+                date=str(data.get('date')),
+                time=str(data.get('time')),
+                location=str(data.get('location')),
+                lat=float(lat),
+                lng=float(lng),
+                totalPrice=int(totalPrice),
+                description=str(data.get('description', "")),
+                event_category_id=category.id,
+                event_host_id=host.id,
+                matchmake=bool(data.get("matchmake", False))
+            )
 
-    return jsonify({'message': "New Location added"}), 201
+            db.session.add(newLocationDetails)
+            db.session.commit()
+            print("Location added:", newLocationDetails.id)
+
+        except (TypeError, ValueError) as e:
+            print("Invalid input type:", e)
+            traceback.print_exc()
+            db.session.rollback()
+            return jsonify({"error": "Invalid input types"}), 400
+        except SQLAlchemyError as e:
+            print("Error creating LocationInfo:", e)
+            traceback.print_exc()
+            db.session.rollback()
+            return jsonify({"error": "Failed to add location"}), 500
+
+        return jsonify({'message': "New Location added", "id": newLocationDetails.id}), 201
+
+    except Exception as e:
+        print("Unexpected error in /locationInfo:", e)
+        traceback.print_exc()
+        return jsonify({"error": "Internal server error"}), 500
 
 
 @app.route('/locationInfo', methods=['GET'])
