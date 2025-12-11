@@ -1257,14 +1257,16 @@ def postLocationInfo():
 
     category = EventCategory.query.filter_by(name=category_name).first()
     if not category:
-        # Create a new category with this name
         category = EventCategory(name=category_name)
         db.session.add(category)
         db.session.commit()
 
     # HOST — must exist already (ID from frontend)
     host_id = data.get("event_host_id")
-    host = EventHost.id.get(host_id)
+    if not host_id:
+        return jsonify({"error": "event_host_id is required"}), 400
+
+    host = EventHost.query.get(host_id)
     if not host:
         return jsonify({"error": "Invalid event_host_id"}), 400
 
@@ -1291,7 +1293,6 @@ def postLocationInfo():
     db.session.commit()
 
     return jsonify({'message': "New Location added"}), 201
-
 
 
 @app.route('/locationInfo', methods=['GET'])
