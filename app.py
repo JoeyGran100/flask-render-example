@@ -1250,23 +1250,26 @@ def get_relationship_data():
 def postLocationInfo():
     data = request.get_json()
 
-    # CATEGORY (string value: Music, Festival, etc.)
+    # CATEGORY — frontend sends a string name: "Music", "Festival", etc.
     category_name = data.get("event_category")
+    if not category_name:
+        return jsonify({"error": "event_category is required"}), 400
+
     category = EventCategory.query.filter_by(name=category_name).first()
     if not category:
-        # only categories are allowed to be created on the fly
+        # Create a new category with this name
         category = EventCategory(name=category_name)
         db.session.add(category)
         db.session.commit()
 
-    # HOST (must be ID from frontend, cannot be created)
+    # HOST — must exist already (ID from frontend)
     host_id = data.get("event_host_id")
-    host = EventHost.query.get(host_id)
+    host = EventHost.id.get(host_id)
     if not host:
         return jsonify({"error": "Invalid event_host_id"}), 400
-    
-    # MATCHMAKE (optional, default False)
-    matchmake_value = data.get('matchmake', False)
+
+    # MATCHMAKE — optional, False default
+    matchmake_value = data.get("matchmake", False)
 
     newLocationDetails = LocationInfo(
         maxAttendees=data.get('maxAttendees'),
@@ -1286,7 +1289,9 @@ def postLocationInfo():
 
     db.session.add(newLocationDetails)
     db.session.commit()
+
     return jsonify({'message': "New Location added"}), 201
+
 
 
 @app.route('/locationInfo', methods=['GET'])
