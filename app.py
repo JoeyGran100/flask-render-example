@@ -14,7 +14,7 @@ from flask import request, jsonify
 
 app = Flask(__name__)
 app.config[
-    'SQLALCHEMY_DATABASE_URI'] = "postgresql://wingstest1_render_example_user:Tv7SPi3eAfaGJNrImwHN1qjCtLXHwCnO@dpg-d4s60h4hg0os73deb940-a.frankfurt-postgres.render.com/wingstest1_render_example"
+    'SQLALCHEMY_DATABASE_URI'] = "postgresql://wingstest1_render_example_i686_user:potZ9JickG4bSl1f2PYy6LxNc9z8YkwO@dpg-d4tbnhkhg0os73cqms8g-a.frankfurt-postgres.render.com/wingstest1_render_example_i686"
 socketio = SocketIO(app)
 db = SQLAlchemy(app)
 
