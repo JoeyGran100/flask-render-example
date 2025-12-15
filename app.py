@@ -1289,25 +1289,28 @@ def postLocationInfo():
 
         # ===== OTHER FIELDS =====
         try:
-            maxAttendees = data.get('maxAttendees')
-            if maxAttendees is None:
-                return jsonify({"error": "maxAttendees is required"}), 400
 
             lat = data.get('lat')
             lng = data.get('lng')
             totalPrice = data.get('totalPrice')
+            maxAttendees = data.get('maxAttendees')
+            date = data.get('date')
+            time = data.get('time')
+            location = data.get('location')
+            description = data.get('description')
+            location = data.get('location')
 
             newLocationDetails = LocationInfo(
-                maxAttendees=int(maxAttendees),
+                maxAttendees=maxAttendees,
                 maleAttendees=0,
                 femaleAttendees=0,
-                date=str(data.get('date')),
-                time=str(data.get('time')),
-                location=str(data.get('location')),
-                lat=float(lat),
-                lng=float(lng),
-                totalPrice=int(totalPrice),
-                description=str(data.get('description', "")),
+                date=date,
+                time=time,
+                location=location,
+                lat=lat,
+                lng=lng,
+                totalPrice=totalPrice,
+                description=description,
                 event_category_id=category.id,
                 event_host_id=host.id,
                 matchmake=bool(data.get("matchmake", False))
