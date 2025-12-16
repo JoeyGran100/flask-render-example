@@ -1012,24 +1012,22 @@ def postUserData():
 
 
 @app.route('/userData/<int:user_id>', methods=['PUT'])
-def update_user_data():
+def update_user_data(user_id):  # <-- include user_id here
     try:
         data = request.get_json()
-
-        newEmail = data['email']
-        user = Task.query.filter_by(email=newEmail).first()
-
+        
+        # Use user_id to fetch user instead of email (optional)
+        user = Task.query.filter_by(id=user_id).first()
+        
         if not user:
-            return jsonify({'error': "No User registered with this mail"}), 404
+            return jsonify({'error': "No User found with this ID"}), 404
 
-        user_auth_id = user.id
-
-        userDetails = UserData.query.filter_by(user_auth_id=user_auth_id).first()
+        userDetails = UserData.query.filter_by(user_auth_id=user.id).first()
 
         if not userDetails:
             return jsonify({'error': "User details not found"}), 404
 
-        # Update fields (use .get to avoid KeyErrors)
+        # Update fields
         userDetails.firstname = data.get('firstname', userDetails.firstname)
         userDetails.lastname = data.get('lastname', userDetails.lastname)
         userDetails.gender = data.get('gender', userDetails.gender)
