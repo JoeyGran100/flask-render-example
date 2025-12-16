@@ -1011,6 +1011,43 @@ def postUserData():
         return jsonify({'error': 'Internal Server Error'}), 500
 
 
+@app.route('/userData/<int:user_id>', methods=['PUT'])
+def update_user_data():
+    try:
+        data = request.get_json()
+
+        newEmail = data['email']
+        user = Task.query.filter_by(email=newEmail).first()
+
+        if not user:
+            return jsonify({'error': "No User registered with this mail"}), 404
+
+        user_auth_id = user.id
+
+        userDetails = UserData.query.filter_by(user_auth_id=user_auth_id).first()
+
+        if not userDetails:
+            return jsonify({'error': "User details not found"}), 404
+
+        # Update fields (use .get to avoid KeyErrors)
+        userDetails.firstname = data.get('firstname', userDetails.firstname)
+        userDetails.lastname = data.get('lastname', userDetails.lastname)
+        userDetails.gender = data.get('gender', userDetails.gender)
+        userDetails.hobbies = data.get('hobbies', userDetails.hobbies)
+        userDetails.preferences = data.get('preferences', userDetails.preferences)
+        userDetails.phone_number = data.get('phone_number', userDetails.phone_number)
+        userDetails.age = data.get('age', userDetails.age)
+        userDetails.bio = data.get('bio', userDetails.bio)
+
+        db.session.commit()
+
+        return jsonify({'message': 'User details updated'}), 200
+
+    except Exception as e:
+        return jsonify({'error': 'Internal Server Error'}), 500
+
+
+
 # POSTING Relationships DATA TO DATABASE 2025
 @app.route('/relationshipData', methods=['POST'])
 def postRelationshipsData():
