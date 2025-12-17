@@ -1962,15 +1962,20 @@ def sign_in():
         user = Task.query.filter_by(email=email).first()
 
         if user:
-            if password == user.password:  # Compare passwords directly
-                return jsonify({'message': 'Sign in successful'}), 200
+            if password == user.password:
+                return jsonify({
+                    'message': 'Sign in successful',
+                    'user_auth_id': user.id  # <-- include Task ID
+                }), 200
             else:
                 return jsonify({'message': 'Invalid credentials'}), 401
         else:
             return jsonify({'message': 'Invalid credentials'}), 401
 
     except Exception as e:
+        print("Sign-in error:", e)
         return jsonify({'error': 'Internal Server Error'}), 500
+
 
 
 # Getting Sign-in DATA
