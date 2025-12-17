@@ -1026,10 +1026,10 @@ def postUserData():
 
 
 @app.route('/userData/<int:user_auth_id>', methods=['PUT'])
-def update_user_data(user_auth_id):
+def update_user_data():
     try:
         data = request.get_json()
-
+        user_auth_id = data['user_auth_id']
         # Get profile row using auth ID
         user_details = UserData.query.filter_by(
             user_auth_id=user_auth_id
