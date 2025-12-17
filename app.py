@@ -1026,11 +1026,10 @@ def postUserData():
 
 
 @app.route('/userData/<int:user_auth_id>', methods=['PUT'])
-def update_user_data():
+def update_user_data(user_auth_id):
     try:
         data = request.get_json()
-        user_auth_id = data['user_auth_id']
-        # Get profile row using auth ID
+
         user_details = UserData.query.filter_by(
             user_auth_id=user_auth_id
         ).first()
@@ -1038,7 +1037,6 @@ def update_user_data():
         if not user_details:
             return jsonify({'error': 'User details not found'}), 404
 
-        # Update profile fields
         user_details.firstname = data.get('firstname', user_details.firstname)
         user_details.lastname = data.get('lastname', user_details.lastname)
         user_details.gender = data.get('gender', user_details.gender)
@@ -1054,8 +1052,7 @@ def update_user_data():
 
     except Exception as e:
         print("Update user error:", e)
-        return jsonify({'error': 'Internal Server Error'}), 500
-
+        return jsonify({'error': str(e)}), 500
 
 
 # POSTING Relationships DATA TO DATABASE 2025
