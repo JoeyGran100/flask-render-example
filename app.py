@@ -939,11 +939,6 @@ def postData():
         if existing_user:
             return jsonify({'message': 'Email already exists'}), 400
 
-        # Create new auth user
-        new_user = Task(email=new_email, password=new_password)
-        db.session.add(new_user)
-        db.session.commit()
-
         # Create new user in Task table
         new_user = Task(email=new_email, password=new_password)
         db.session.add(new_user)
