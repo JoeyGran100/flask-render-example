@@ -944,16 +944,15 @@ def postData():
         db.session.add(new_user)
         db.session.commit()
 
-        # Create linked UserData profile
-        new_profile = UserData(user_auth_id=new_user.id)
-        db.session.add(new_profile)
+        # Create new user in Task table
+        new_user = Task(email=new_email, password=new_password)
+        db.session.add(new_user)
         db.session.commit()
 
-        # Return both IDs to frontend
+        # Return the id of the created user (to use as user_auth_id later)
         return jsonify({
-            "user_auth_id": new_user.id,
-            "profile_id": new_profile.id,
-            "email": new_user.email
+            'message': 'User added successfully',
+            'user_auth_id': new_user.id
         }), 201
 
     except Exception as e:
