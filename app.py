@@ -1028,7 +1028,10 @@ def postUserData():
 @app.route('/userData/<int:user_auth_id>', methods=['PUT'])
 def update_user_data(user_auth_id):
     try:
-        data = request.get_json()
+        data = request.get_json(force=True)
+
+        if not data:
+            return jsonify({"error": "Missing JSON body"}), 400
 
         user_details = UserData.query.filter_by(
             user_auth_id=user_auth_id
@@ -1037,22 +1040,48 @@ def update_user_data(user_auth_id):
         if not user_details:
             return jsonify({'error': 'User details not found'}), 404
 
-        user_details.firstname = data.get('firstname', user_details.firstname)
-        user_details.lastname = data.get('lastname', user_details.lastname)
-        user_details.gender = data.get('gender', user_details.gender)
-        user_details.hobbies = data.get('hobbies', user_details.hobbies)
-        user_details.preferences = data.get('preferences', user_details.preferences)
-        user_details.phone_number = data.get('phone_number', user_details.phone_number)
-        user_details.age = data.get('age', user_details.age)
-        user_details.bio = data.get('bio', user_details.bio)
+        # Update ONLY if key exists (important)
+        if 'firstname' in data:
+            user_details.firstname = data['firstname']
+
+        if 'lastname' in data:
+            user_details.lastname = data['lastname']
+
+        if 'gender' in data:
+            user_details.gender = data['gender']
+
+        if 'hobbies' in data:
+            user_details.hobbies = data['hobbies']
+
+        if 'preferences' in data:
+            user_details.preferences = data['preferences']
+
+        if 'phone_number' in data:
+            user_details.phone_number = data['phone_number']
+
+        if 'age' in data:
+            user_details.age = data['age']
+
+        if 'bio' in data:
+            user_details.bio = data['bio']
 
         db.session.commit()
 
-        return jsonify({'message': 'User details updated'}), 200
+        return jsonify({
+            "user_auth_id": user_details.user_auth_id,
+            "firstname": user_details.firstname,
+            "lastname": user_details.lastname,
+            "email": user_details.email,
+            "phone_number": user_details.phone_number,
+            "age": user_details.age,
+            "bio": user_details.bio
+        }), 200
 
     except Exception as e:
+        db.session.rollback()
         print("Update user error:", e)
         return jsonify({'error': str(e)}), 500
+
 
 
 # POSTING Relationships DATA TO DATABASE 2025
