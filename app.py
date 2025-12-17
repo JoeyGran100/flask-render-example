@@ -939,15 +939,27 @@ def postData():
         if existing_user:
             return jsonify({'message': 'Email already exists'}), 400
 
-        # Create new user
-        newUserDetails = Task(email=new_email, password=new_password)
-        db.session.add(newUserDetails)
+        # Create new auth user
+        new_user = Task(email=new_email, password=new_password)
+        db.session.add(new_user)
         db.session.commit()
-        return jsonify({'message': "New User added"}), 201
+
+        # Create linked UserData profile
+        new_profile = UserData(user_auth_id=new_user.id)
+        db.session.add(new_profile)
+        db.session.commit()
+
+        # Return both IDs to frontend
+        return jsonify({
+            "user_auth_id": new_user.id,
+            "profile_id": new_profile.id,
+            "email": new_user.email
+        }), 201
 
     except Exception as e:
-        print(e)
+        print("Signup error:", e)
         return jsonify({'error': 'Internal Server Error'}), 500
+
 
 
 # POSTING USER DATA TO DATABASE
