@@ -13,6 +13,7 @@ from sqlalchemy import or_, and_, desc
 from flask import request, jsonify
 import traceback
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError
 
 app = Flask(__name__)
 app.config[
@@ -934,7 +935,7 @@ def postData():
         if not re.match(email_regex, new_email):
             return jsonify({'message': 'Invalid email format'}), 400
 
-        # Check if the email already exists
+        # Check if email already exists
         existing_user = Task.query.filter_by(email=new_email).first()
         if existing_user:
             return jsonify({'message': 'Email already exists'}), 400
@@ -950,9 +951,16 @@ def postData():
             'user_auth_id': new_user.id
         }), 201
 
+    except IntegrityError as ie:
+        # Rollback in case of unique constraint violations
+        db.session.rollback()
+        return jsonify({'message': 'Email already exists'}), 400
+
     except Exception as e:
+        db.session.rollback()
         print("Signup error:", e)
         return jsonify({'error': 'Internal Server Error'}), 500
+
 
 
 
