@@ -1011,37 +1011,35 @@ def postUserData():
         return jsonify({'error': 'Internal Server Error'}), 500
 
 
-@app.route('/userData/<int:user_id>', methods=['PUT'])
-def update_user_data(user_id):  # <-- include user_id here
+@app.route('/userData/<int:user_auth_id>', methods=['PUT'])
+def update_user_data(user_auth_id):
     try:
         data = request.get_json()
-        
-        # Use user_id to fetch user instead of email (optional)
-        user = Task.query.filter_by(id=user_id).first()
-        
-        if not user:
-            return jsonify({'error': "No User found with this ID"}), 404
 
-        userDetails = UserData.query.filter_by(user_auth_id=user.id).first()
+        # Get profile row using auth ID
+        user_details = UserData.query.filter_by(
+            user_auth_id=user_auth_id
+        ).first()
 
-        if not userDetails:
-            return jsonify({'error': "User details not found"}), 404
+        if not user_details:
+            return jsonify({'error': 'User details not found'}), 404
 
-        # Update fields
-        userDetails.firstname = data.get('firstname', userDetails.firstname)
-        userDetails.lastname = data.get('lastname', userDetails.lastname)
-        userDetails.gender = data.get('gender', userDetails.gender)
-        userDetails.hobbies = data.get('hobbies', userDetails.hobbies)
-        userDetails.preferences = data.get('preferences', userDetails.preferences)
-        userDetails.phone_number = data.get('phone_number', userDetails.phone_number)
-        userDetails.age = data.get('age', userDetails.age)
-        userDetails.bio = data.get('bio', userDetails.bio)
+        # Update profile fields
+        user_details.firstname = data.get('firstname', user_details.firstname)
+        user_details.lastname = data.get('lastname', user_details.lastname)
+        user_details.gender = data.get('gender', user_details.gender)
+        user_details.hobbies = data.get('hobbies', user_details.hobbies)
+        user_details.preferences = data.get('preferences', user_details.preferences)
+        user_details.phone_number = data.get('phone_number', user_details.phone_number)
+        user_details.age = data.get('age', user_details.age)
+        user_details.bio = data.get('bio', user_details.bio)
 
         db.session.commit()
 
         return jsonify({'message': 'User details updated'}), 200
 
     except Exception as e:
+        print("Update user error:", e)
         return jsonify({'error': 'Internal Server Error'}), 500
 
 
